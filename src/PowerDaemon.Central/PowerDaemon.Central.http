@@ -1,0 +1,6 @@
+@PowerDaemon.Central_HostAddress = http://localhost:5022
+
+GET {{PowerDaemon.Central_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

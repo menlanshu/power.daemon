@@ -1,0 +1,457 @@
+@page "/metrics"
+@using Microsoft.EntityFrameworkCore
+@using PowerDaemon.Central.Data
+@using PowerDaemon.Shared.Models
+@using Microsoft.AspNetCore.SignalR.Client
+@inject PowerDaemonContext DbContext
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<PageTitle>Metrics - PowerDaemon</PageTitle>
+
+<div class="metrics-container">
+    <div class="metrics-header">
+        <h1>System Metrics</h1>
+        <div class="header-actions">
+            <select @bind="selectedServerId" @bind:after="LoadMetrics" class="server-filter">
+                <option value="">All Servers</option>
+                @foreach (var server in servers)
+                {
+                    <option value="@server.Id">@server.Hostname</option>
+                }
+            </select>
+            <select @bind="selectedMetricType" @bind:after="LoadMetrics" class="metric-type-filter">
+                <option value="">All Types</option>
+                <option value="CPU">CPU</option>
+                <option value="Memory">Memory</option>
+                <option value="Disk">Disk</option>
+                <option value="Network">Network</option>
+            </select>
+            <select @bind="timeRange" @bind:after="LoadMetrics" class="time-range-filter">
+                <option value="1">Last Hour</option>
+                <option value="6">Last 6 Hours</option>
+                <option value="24">Last 24 Hours</option>
+                <option value="168">Last Week</option>
+            </select>
+            <button class="refresh-btn" @onclick="LoadMetrics">🔄 Refresh</button>
+        </div>
+    </div>
+
+    <div class="metrics-summary">
+        <div class="summary-card cpu">
+            <div class="card-header">
+                <h3>CPU Usage</h3>
+                <span class="metric-value">@latestCpuUsage%</span>
+            </div>
+            <div class="card-content">
+                <div class="metric-bar">
+                    <div class="metric-fill" style="width: @(latestCpuUsage)%"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="summary-card memory">
+            <div class="card-header">
+                <h3>Memory Usage</h3>
+                <span class="metric-value">@latestMemoryUsage%</span>
+            </div>
+            <div class="card-content">
+                <div class="metric-bar">
+                    <div class="metric-fill" style="width: @(latestMemoryUsage)%"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="summary-card disk">
+            <div class="card-header">
+                <h3>Disk Usage</h3>
+                <span class="metric-value">@latestDiskUsage%</span>
+            </div>
+            <div class="card-content">
+                <div class="metric-bar">
+                    <div class="metric-fill" style="width: @(latestDiskUsage)%"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="summary-card network">
+            <div class="card-header">
+                <h3>Network I/O</h3>
+                <span class="metric-value">@latestNetworkIO MB/s</span>
+            </div>
+            <div class="card-content">
+                <div class="metric-bar">
+                    <div class="metric-fill" style="width: @Math.Min(latestNetworkIO * 10, 100)%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="metrics-charts">
+        <div class="chart-container">
+            <div class="chart-header">
+                <h3>CPU Usage Over Time</h3>
+            </div>
+            <div class="chart-content">
+                <canvas id="cpuChart" width="800" height="400"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <div class="chart-header">
+                <h3>Memory Usage Over Time</h3>
+            </div>
+            <div class="chart-content">
+                <canvas id="memoryChart" width="800" height="400"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="metrics-table">
+        <h3>Recent Metrics</h3>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Server</th>
+                    <th>Metric Type</th>
+                    <th>Metric Name</th>
+                    <th>Value</th>
+                    <th>Unit</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var metric in recentMetrics.Take(50))
+                {
+                    <tr>
+                        <td>@metric.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                        <td>@GetServerName(metric.ServerId)</td>
+                        <td>
+                            <span class="metric-type-badge @metric.MetricType.ToLower()">
+                                @metric.MetricType
+                            </span>
+                        </td>
+                        <td>@metric.MetricName</td>
+                        <td>@metric.Value.ToString("F2")</td>
+                        <td>@metric.Unit</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<style>
+    .metrics-container {
+        padding: 1rem;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    .metrics-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+    }
+
+    .server-filter, .metric-type-filter, .time-range-filter {
+        padding: 0.5rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background: white;
+    }
+
+    .refresh-btn {
+        background: #007bff;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .metrics-summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .summary-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        border-left: 4px solid #ccc;
+    }
+
+    .summary-card.cpu { border-left-color: #e74c3c; }
+    .summary-card.memory { border-left-color: #f39c12; }
+    .summary-card.disk { border-left-color: #3498db; }
+    .summary-card.network { border-left-color: #2ecc71; }
+
+    .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .card-header h3 {
+        margin: 0;
+        font-size: 1rem;
+        color: #666;
+    }
+
+    .metric-value {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #333;
+    }
+
+    .metric-bar {
+        width: 100%;
+        height: 8px;
+        background: #f0f0f0;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .metric-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #2ecc71, #f39c12, #e74c3c);
+        transition: width 0.3s ease;
+    }
+
+    .metrics-charts {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+        margin-bottom: 2rem;
+    }
+
+    .chart-container {
+        background: white;
+        padding: 1rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .chart-header {
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .chart-header h3 {
+        margin: 0;
+        font-size: 1.1rem;
+        color: #333;
+    }
+
+    .chart-content {
+        position: relative;
+        height: 300px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f8f9fa;
+        border-radius: 4px;
+    }
+
+    .chart-content::before {
+        content: "📊 Chart visualization coming soon";
+        color: #666;
+        font-size: 0.9rem;
+    }
+
+    .metrics-table {
+        background: white;
+        padding: 1rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 1rem;
+    }
+
+    .table th {
+        background: #f8f9fa;
+        padding: 0.75rem;
+        text-align: left;
+        font-weight: bold;
+        border-bottom: 2px solid #e0e0e0;
+    }
+
+    .table td {
+        padding: 0.5rem 0.75rem;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .metric-type-badge {
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: bold;
+    }
+
+    .metric-type-badge.cpu { background-color: #ffe6e6; color: #e74c3c; }
+    .metric-type-badge.memory { background-color: #fff3e0; color: #f39c12; }
+    .metric-type-badge.disk { background-color: #e3f2fd; color: #3498db; }
+    .metric-type-badge.network { background-color: #e8f5e8; color: #2ecc71; }
+
+    @@media (max-width: 768px) {
+        .metrics-header {
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .header-actions {
+            flex-wrap: wrap;
+        }
+
+        .metrics-summary {
+            grid-template-columns: 1fr;
+        }
+
+        .metrics-charts {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+@code {
+    private List<Server> servers = new();
+    private List<Metric> recentMetrics = new();
+    private string selectedServerId = "";
+    private string selectedMetricType = "";
+    private int timeRange = 24; // hours
+
+    private double latestCpuUsage = 0;
+    private double latestMemoryUsage = 0;
+    private double latestDiskUsage = 0;
+    private double latestNetworkIO = 0;
+
+    private HubConnection? hubConnection;
+
+    public bool IsConnected =>
+        hubConnection?.State == HubConnectionState.Connected;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadServers();
+        await LoadMetrics();
+        await SetupSignalRConnection();
+    }
+
+    private async Task LoadServers()
+    {
+        servers = await DbContext.Servers
+            .Where(s => s.IsActive)
+            .OrderBy(s => s.Hostname)
+            .ToListAsync();
+    }
+
+    private async Task LoadMetrics()
+    {
+        var query = DbContext.Metrics.AsQueryable();
+
+        // Apply filters
+        if (!string.IsNullOrEmpty(selectedServerId) && Guid.TryParse(selectedServerId, out var serverId))
+        {
+            query = query.Where(m => m.ServerId == serverId);
+        }
+
+        if (!string.IsNullOrEmpty(selectedMetricType))
+        {
+            query = query.Where(m => m.MetricType == selectedMetricType);
+        }
+
+        // Apply time range filter
+        var cutoffTime = DateTime.UtcNow.AddHours(-timeRange);
+        query = query.Where(m => m.Timestamp >= cutoffTime);
+
+        recentMetrics = await query
+            .OrderByDescending(m => m.Timestamp)
+            .Take(1000)
+            .ToListAsync();
+
+        // Calculate latest values for summary cards
+        CalculateLatestMetrics();
+    }
+
+    private void CalculateLatestMetrics()
+    {
+        var latestTime = DateTime.UtcNow.AddMinutes(-10); // Look for metrics within last 10 minutes
+
+        latestCpuUsage = recentMetrics
+            .Where(m => m.MetricType == "CPU" && m.MetricName.Contains("usage") && m.Timestamp >= latestTime)
+            .OrderByDescending(m => m.Timestamp)
+            .FirstOrDefault()?.Value ?? 0;
+
+        latestMemoryUsage = recentMetrics
+            .Where(m => m.MetricType == "Memory" && m.MetricName.Contains("usage") && m.Timestamp >= latestTime)
+            .OrderByDescending(m => m.Timestamp)
+            .FirstOrDefault()?.Value ?? 0;
+
+        latestDiskUsage = recentMetrics
+            .Where(m => m.MetricType == "Disk" && m.MetricName.Contains("usage") && m.Timestamp >= latestTime)
+            .OrderByDescending(m => m.Timestamp)
+            .FirstOrDefault()?.Value ?? 0;
+
+        latestNetworkIO = recentMetrics
+            .Where(m => m.MetricType == "Network" && m.Timestamp >= latestTime)
+            .OrderByDescending(m => m.Timestamp)
+            .FirstOrDefault()?.Value ?? 0;
+
+        // Convert bytes to MB for network I/O if needed
+        if (latestNetworkIO > 1000000)
+        {
+            latestNetworkIO = latestNetworkIO / 1000000; // Convert to MB
+        }
+    }
+
+    private async Task SetupSignalRConnection()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl("/dashboardhub")
+            .WithAutomaticReconnect()
+            .Build();
+
+        hubConnection.On<object>("MetricsUpdate", (update) =>
+        {
+            InvokeAsync(async () =>
+            {
+                await LoadMetrics();
+                StateHasChanged();
+            });
+        });
+
+        await hubConnection.StartAsync();
+    }
+
+    private string GetServerName(Guid serverId)
+    {
+        return servers.FirstOrDefault(s => s.Id == serverId)?.Hostname ?? "Unknown";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+}

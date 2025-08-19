@@ -1,0 +1,393 @@
+@page "/"
+@using Microsoft.EntityFrameworkCore
+@using PowerDaemon.Central.Data
+@using PowerDaemon.Shared.Models
+@using Microsoft.AspNetCore.SignalR.Client
+@inject PowerDaemonContext DbContext
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<PageTitle>PowerDaemon Dashboard</PageTitle>
+
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1>PowerDaemon Enterprise Monitor</h1>
+        <div class="connection-status @(IsConnected ? "connected" : "disconnected")">
+            @(IsConnected ? "Connected" : "Disconnected")
+        </div>
+    </div>
+
+    <div class="dashboard-stats">
+        <div class="stat-card servers">
+            <div class="stat-value">@servers.Count</div>
+            <div class="stat-label">Total Servers</div>
+            <div class="stat-detail">@servers.Count(s => s.IsActive) Active</div>
+        </div>
+        <div class="stat-card services">
+            <div class="stat-value">@totalServices</div>
+            <div class="stat-label">Total Services</div>
+            <div class="stat-detail">@runningServices Running</div>
+        </div>
+        <div class="stat-card alerts">
+            <div class="stat-value">@alertCount</div>
+            <div class="stat-label">Active Alerts</div>
+            <div class="stat-detail">@criticalAlerts Critical</div>
+        </div>
+        <div class="stat-card uptime">
+            <div class="stat-value">@systemUptime</div>
+            <div class="stat-label">System Uptime</div>
+            <div class="stat-detail">@DateTime.UtcNow.ToString("HH:mm UTC")</div>
+        </div>
+    </div>
+
+    <div class="dashboard-content">
+        <div class="servers-panel">
+            <div class="panel-header">
+                <h3>Server Status</h3>
+                <button class="refresh-btn" @onclick="RefreshData">🔄</button>
+            </div>
+            <div class="servers-grid">
+                @foreach (var server in servers.OrderBy(s => s.Hostname))
+                {
+                    <div class="server-card @GetServerStatusClass(server)">
+                        <div class="server-header">
+                            <h4>@server.Hostname</h4>
+                            <span class="status-badge @server.AgentStatus.ToString().ToLower()">
+                                @server.AgentStatus
+                            </span>
+                        </div>
+                        <div class="server-details">
+                            <div class="detail-item">
+                                <span class="label">OS:</span>
+                                <span class="value">@server.OsType @server.OsVersion</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="label">Services:</span>
+                                <span class="value">@GetServerServiceCount(server.Id)</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="label">Last Heartbeat:</span>
+                                <span class="value">@GetTimeAgo(server.LastHeartbeat)</span>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="recent-events-panel">
+            <div class="panel-header">
+                <h3>Recent Events</h3>
+            </div>
+            <div class="events-list">
+                @foreach (var eventItem in recentEvents.Take(10))
+                {
+                    <div class="event-item @eventItem.Type.ToLower()">
+                        <div class="event-timestamp">@eventItem.Timestamp.ToString("HH:mm:ss")</div>
+                        <div class="event-message">@eventItem.Message</div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .dashboard-container {
+        padding: 1rem;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    .dashboard-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .connection-status {
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        font-weight: bold;
+    }
+
+    .connected { background-color: #d4edda; color: #155724; }
+    .disconnected { background-color: #f8d7da; color: #721c24; }
+
+    .dashboard-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .stat-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        text-align: center;
+    }
+
+    .stat-value {
+        font-size: 2.5rem;
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+    }
+
+    .stat-label {
+        font-size: 0.9rem;
+        color: #666;
+        margin-bottom: 0.25rem;
+    }
+
+    .stat-detail {
+        font-size: 0.8rem;
+        color: #999;
+    }
+
+    .dashboard-content {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 2rem;
+    }
+
+    .panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .refresh-btn {
+        background: none;
+        border: 1px solid #ddd;
+        padding: 0.5rem;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .servers-grid {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .server-card {
+        background: white;
+        padding: 1rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        border-left: 4px solid #ccc;
+    }
+
+    .server-card.healthy { border-left-color: #28a745; }
+    .server-card.warning { border-left-color: #ffc107; }
+    .server-card.critical { border-left-color: #dc3545; }
+
+    .server-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .status-badge {
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: bold;
+    }
+
+    .status-badge.connected { background-color: #d4edda; color: #155724; }
+    .status-badge.healthy { background-color: #d4edda; color: #155724; }
+    .status-badge.warning { background-color: #fff3cd; color: #856404; }
+    .status-badge.critical { background-color: #f8d7da; color: #721c24; }
+    .status-badge.unknown { background-color: #e2e3e5; color: #495057; }
+
+    .server-details {
+        display: grid;
+        gap: 0.5rem;
+    }
+
+    .detail-item {
+        display: flex;
+        justify-content: space-between;
+    }
+
+    .detail-item .label {
+        font-weight: bold;
+        color: #666;
+    }
+
+    .events-list {
+        background: white;
+        border-radius: 8px;
+        padding: 1rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        max-height: 500px;
+        overflow-y: auto;
+    }
+
+    .event-item {
+        display: flex;
+        gap: 1rem;
+        padding: 0.5rem;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .event-timestamp {
+        font-family: monospace;
+        font-size: 0.8rem;
+        color: #666;
+        min-width: 60px;
+    }
+
+    .event-message {
+        flex: 1;
+        font-size: 0.9rem;
+    }
+
+    @@media (max-width: 768px) {
+        .dashboard-content {
+            grid-template-columns: 1fr;
+        }
+        
+        .dashboard-stats {
+            grid-template-columns: 1fr 1fr;
+        }
+    }
+</style>
+
+@code {
+    private List<Server> servers = new();
+    private int totalServices = 0;
+    private int runningServices = 0;
+    private int alertCount = 0;
+    private int criticalAlerts = 0;
+    private string systemUptime = "99.9%";
+    private List<EventItem> recentEvents = new();
+
+    private HubConnection? hubConnection;
+
+    public bool IsConnected =>
+        hubConnection?.State == HubConnectionState.Connected;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadInitialData();
+        await SetupSignalRConnection();
+    }
+
+    private async Task LoadInitialData()
+    {
+        servers = await DbContext.Servers
+            .OrderBy(s => s.Hostname)
+            .ToListAsync();
+
+        var services = await DbContext.Services
+            .Where(s => s.IsActive)
+            .ToListAsync();
+
+        totalServices = services.Count;
+        runningServices = services.Count(s => s.Status == ServiceStatus.Running);
+
+        // Calculate alerts (servers not heard from in last 5 minutes)
+        var alertThreshold = DateTime.UtcNow.AddMinutes(-5);
+        alertCount = servers.Count(s => s.LastHeartbeat < alertThreshold);
+        criticalAlerts = servers.Count(s => s.LastHeartbeat < DateTime.UtcNow.AddMinutes(-15));
+
+        // Add some sample events
+        recentEvents = new List<EventItem>
+        {
+            new() { Type = "Info", Message = "Dashboard initialized", Timestamp = DateTime.UtcNow.AddMinutes(-1) },
+            new() { Type = "Success", Message = "All systems operational", Timestamp = DateTime.UtcNow.AddMinutes(-5) }
+        };
+    }
+
+    private async Task SetupSignalRConnection()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl("/dashboardhub")
+            .WithAutomaticReconnect()
+            .Build();
+
+        hubConnection.On<object>("ServerStatusUpdate", (update) =>
+        {
+            InvokeAsync(async () =>
+            {
+                await LoadInitialData();
+                StateHasChanged();
+            });
+        });
+
+        hubConnection.On<object>("ServiceStatusUpdate", (update) =>
+        {
+            InvokeAsync(async () =>
+            {
+                await LoadInitialData();
+                StateHasChanged();
+            });
+        });
+
+        hubConnection.On<object>("SystemAlert", (alert) =>
+        {
+            InvokeAsync(() =>
+            {
+                // Handle system alerts
+                StateHasChanged();
+                return Task.CompletedTask;
+            });
+        });
+
+        await hubConnection.StartAsync();
+    }
+
+    private async Task RefreshData()
+    {
+        await LoadInitialData();
+        StateHasChanged();
+    }
+
+    private string GetServerStatusClass(Server server)
+    {
+        if (server.LastHeartbeat < DateTime.UtcNow.AddMinutes(-15))
+            return "critical";
+        if (server.LastHeartbeat < DateTime.UtcNow.AddMinutes(-5))
+            return "warning";
+        return "healthy";
+    }
+
+    private int GetServerServiceCount(Guid serverId)
+    {
+        return DbContext.Services.Count(s => s.ServerId == serverId && s.IsActive);
+    }
+
+    private string GetTimeAgo(DateTime? timestamp)
+    {
+        if (!timestamp.HasValue) return "Never";
+        
+        var timeSpan = DateTime.UtcNow - timestamp.Value;
+        if (timeSpan.TotalMinutes < 1) return "Just now";
+        if (timeSpan.TotalMinutes < 60) return $"{(int)timeSpan.TotalMinutes}m ago";
+        if (timeSpan.TotalHours < 24) return $"{(int)timeSpan.TotalHours}h ago";
+        return $"{(int)timeSpan.TotalDays}d ago";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+
+    public class EventItem
+    {
+        public string Type { get; set; } = "";
+        public string Message { get; set; } = "";
+        public DateTime Timestamp { get; set; }
+    }
+}

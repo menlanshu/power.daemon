@@ -1,0 +1,192 @@
+@page "/servers"
+@using Microsoft.EntityFrameworkCore
+@using PowerDaemon.Central.Data
+@using PowerDaemon.Shared.Models
+@inject PowerDaemonContext DbContext
+
+<PageTitle>Servers - PowerDaemon</PageTitle>
+
+<div class="servers-container">
+    <div class="servers-header">
+        <h1>Server Management</h1>
+        <div class="header-actions">
+            <button class="refresh-btn" @onclick="RefreshServers">🔄 Refresh</button>
+        </div>
+    </div>
+
+    <div class="servers-grid">
+        @foreach (var server in servers)
+        {
+            <div class="server-card @GetServerStatusClass(server)">
+                <div class="server-header">
+                    <h3>@server.Hostname</h3>
+                    <span class="status-badge @server.AgentStatus.ToString().ToLower()">
+                        @server.AgentStatus
+                    </span>
+                </div>
+                <div class="server-details">
+                    <div class="detail-row">
+                        <span class="label">IP Address:</span>
+                        <span class="value">@server.IpAddress</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="label">OS:</span>
+                        <span class="value">@server.OsType @server.OsVersion</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="label">CPU Cores:</span>
+                        <span class="value">@server.CpuCores</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="label">Memory:</span>
+                        <span class="value">@server.TotalMemoryMb MB</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="label">Agent Version:</span>
+                        <span class="value">@server.AgentVersion</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="label">Last Heartbeat:</span>
+                        <span class="value">@GetTimeAgo(server.LastHeartbeat)</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="label">Environment:</span>
+                        <span class="value">@server.Environment</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="label">Location:</span>
+                        <span class="value">@server.Location</span>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+    .servers-container {
+        padding: 1rem;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    .servers-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .refresh-btn {
+        background: #007bff;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .servers-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+        gap: 2rem;
+    }
+
+    .server-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        border-left: 4px solid #ccc;
+    }
+
+    .server-card.healthy { border-left-color: #28a745; }
+    .server-card.warning { border-left-color: #ffc107; }
+    .server-card.critical { border-left-color: #dc3545; }
+
+    .server-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .status-badge {
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: bold;
+    }
+
+    .status-badge.connected { background-color: #d4edda; color: #155724; }
+    .status-badge.healthy { background-color: #d4edda; color: #155724; }
+    .status-badge.warning { background-color: #fff3cd; color: #856404; }
+    .status-badge.critical { background-color: #f8d7da; color: #721c24; }
+    .status-badge.unknown { background-color: #e2e3e5; color: #495057; }
+
+    .server-details {
+        display: grid;
+        gap: 0.5rem;
+    }
+
+    .detail-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        padding: 0.25rem 0;
+    }
+
+    .detail-row .label {
+        font-weight: bold;
+        color: #666;
+    }
+
+    .detail-row .value {
+        color: #333;
+        font-family: monospace;
+    }
+</style>
+
+@code {
+    private List<Server> servers = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadServers();
+    }
+
+    private async Task LoadServers()
+    {
+        servers = await DbContext.Servers
+            .OrderBy(s => s.Hostname)
+            .ToListAsync();
+    }
+
+    private async Task RefreshServers()
+    {
+        await LoadServers();
+    }
+
+    private string GetServerStatusClass(Server server)
+    {
+        if (server.LastHeartbeat < DateTime.UtcNow.AddMinutes(-15))
+            return "critical";
+        if (server.LastHeartbeat < DateTime.UtcNow.AddMinutes(-5))
+            return "warning";
+        return "healthy";
+    }
+
+    private string GetTimeAgo(DateTime? timestamp)
+    {
+        if (!timestamp.HasValue) return "Never";
+        
+        var timeSpan = DateTime.UtcNow - timestamp.Value;
+        if (timeSpan.TotalMinutes < 1) return "Just now";
+        if (timeSpan.TotalMinutes < 60) return $"{(int)timeSpan.TotalMinutes}m ago";
+        if (timeSpan.TotalHours < 24) return $"{(int)timeSpan.TotalHours}h ago";
+        return $"{(int)timeSpan.TotalDays}d ago";
+    }
+}

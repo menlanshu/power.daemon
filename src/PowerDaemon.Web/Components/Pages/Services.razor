@@ -1,0 +1,610 @@
+@page "/services"
+@using Microsoft.EntityFrameworkCore
+@using PowerDaemon.Central.Data
+@using PowerDaemon.Shared.Models
+@using PowerDaemon.Web.Services
+@using Microsoft.AspNetCore.SignalR.Client
+@inject PowerDaemonContext DbContext
+@inject IServiceManagementService ServiceManagement
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<PageTitle>Services - PowerDaemon</PageTitle>
+
+<div class="services-container">
+    <div class="services-header">
+        <h1>Service Management</h1>
+        <div class="header-actions">
+            <input type="text" @bind="searchTerm" @onkeyup="FilterServices" placeholder="Search services..." class="search-input" />
+            <select @bind="filterStatus" @bind:after="FilterServices" class="status-filter">
+                <option value="">All Statuses</option>
+                <option value="Running">Running</option>
+                <option value="Stopped">Stopped</option>
+                <option value="Error">Error</option>
+                <option value="Unknown">Unknown</option>
+            </select>
+            <button class="refresh-btn" @onclick="RefreshServices">🔄 Refresh</button>
+        </div>
+    </div>
+
+    <div class="services-stats">
+        <div class="stat-item">
+            <span class="stat-value">@filteredServices.Count</span>
+            <span class="stat-label">Total Services</span>
+        </div>
+        <div class="stat-item running">
+            <span class="stat-value">@filteredServices.Count(s => s.Status == ServiceStatus.Running)</span>
+            <span class="stat-label">Running</span>
+        </div>
+        <div class="stat-item stopped">
+            <span class="stat-value">@filteredServices.Count(s => s.Status == ServiceStatus.Stopped)</span>
+            <span class="stat-label">Stopped</span>
+        </div>
+        <div class="stat-item error">
+            <span class="stat-value">@filteredServices.Count(s => s.Status == ServiceStatus.Error)</span>
+            <span class="stat-label">Errors</span>
+        </div>
+    </div>
+
+    <div class="services-table-container">
+        <table class="services-table">
+            <thead>
+                <tr>
+                    <th>Service Name</th>
+                    <th>Server</th>
+                    <th>Status</th>
+                    <th>Version</th>
+                    <th>Startup Type</th>
+                    <th>Last Update</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var service in filteredServices.OrderBy(s => s.Name))
+                {
+                    <tr class="service-row @GetServiceRowClass(service)">
+                        <td>
+                            <div class="service-name-cell">
+                                <strong>@service.Name</strong>
+                                @if (!string.IsNullOrEmpty(service.DisplayName) && service.DisplayName != service.Name)
+                                {
+                                    <div class="service-display-name">@service.DisplayName</div>
+                                }
+                            </div>
+                        </td>
+                        <td>
+                            <span class="server-hostname" title="@GetServerInfo(service.ServerId)">
+                                @GetServerHostname(service.ServerId)
+                            </span>
+                        </td>
+                        <td>
+                            <span class="status-badge @service.Status.ToString().ToLower()">
+                                @service.Status
+                            </span>
+                        </td>
+                        <td>@(service.Version ?? "Unknown")</td>
+                        <td>@service.StartupType</td>
+                        <td title="@service.UpdatedAt.ToString("yyyy-MM-dd HH:mm:ss UTC")">
+                            @GetTimeAgo(service.UpdatedAt)
+                        </td>
+                        <td>
+                            <div class="action-buttons">
+                                @if (service.Status == ServiceStatus.Stopped)
+                                {
+                                    <button class="action-btn start" @onclick="() => StartService(service)" title="Start Service">
+                                        ▶️
+                                    </button>
+                                }
+                                @if (service.Status == ServiceStatus.Running)
+                                {
+                                    <button class="action-btn stop" @onclick="() => StopService(service)" title="Stop Service">
+                                        ⏹️
+                                    </button>
+                                }
+                                <button class="action-btn restart" @onclick="() => RestartService(service)" title="Restart Service">
+                                    🔄
+                                </button>
+                                <button class="action-btn details" @onclick="() => ShowServiceDetails(service)" title="View Details">
+                                    ℹ️
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (selectedService != null)
+{
+    <div class="service-details-modal" @onclick="CloseModal">
+        <div class="modal-content" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3>Service Details: @selectedService.Name</h3>
+                <button class="close-btn" @onclick="CloseModal">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="detail-grid">
+                    <div class="detail-item">
+                        <strong>Display Name:</strong>
+                        <span>@(selectedService.DisplayName ?? "N/A")</span>
+                    </div>
+                    <div class="detail-item">
+                        <strong>Description:</strong>
+                        <span>@(selectedService.Description ?? "N/A")</span>
+                    </div>
+                    <div class="detail-item">
+                        <strong>Status:</strong>
+                        <span class="status-badge @selectedService.Status.ToString().ToLower()">
+                            @selectedService.Status
+                        </span>
+                    </div>
+                    <div class="detail-item">
+                        <strong>Version:</strong>
+                        <span>@(selectedService.Version ?? "Unknown")</span>
+                    </div>
+                    <div class="detail-item">
+                        <strong>Process ID:</strong>
+                        <span>@(selectedService.ProcessId?.ToString() ?? "N/A")</span>
+                    </div>
+                    <div class="detail-item">
+                        <strong>Port:</strong>
+                        <span>@(selectedService.Port?.ToString() ?? "N/A")</span>
+                    </div>
+                    <div class="detail-item">
+                        <strong>Executable Path:</strong>
+                        <span>@(selectedService.ExecutablePath ?? "N/A")</span>
+                    </div>
+                    <div class="detail-item">
+                        <strong>Working Directory:</strong>
+                        <span>@(selectedService.WorkingDirectory ?? "N/A")</span>
+                    </div>
+                    <div class="detail-item">
+                        <strong>Config File:</strong>
+                        <span>@(selectedService.ConfigFilePath ?? "N/A")</span>
+                    </div>
+                    <div class="detail-item">
+                        <strong>Service Account:</strong>
+                        <span>@(selectedService.ServiceAccount ?? "N/A")</span>
+                    </div>
+                    <div class="detail-item">
+                        <strong>Startup Type:</strong>
+                        <span>@selectedService.StartupType</span>
+                    </div>
+                    <div class="detail-item">
+                        <strong>Last Start Time:</strong>
+                        <span>@(selectedService.LastStartTime?.ToString("yyyy-MM-dd HH:mm:ss UTC") ?? "N/A")</span>
+                    </div>
+                    <div class="detail-item">
+                        <strong>Last Updated:</strong>
+                        <span>@selectedService.UpdatedAt.ToString("yyyy-MM-dd HH:mm:ss UTC")</span>
+                    </div>
+                    <div class="detail-item">
+                        <strong>Created:</strong>
+                        <span>@selectedService.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss UTC")</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .services-container {
+        padding: 1rem;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    .services-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+    }
+
+    .search-input, .status-filter {
+        padding: 0.5rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+
+    .refresh-btn {
+        background: #007bff;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .services-stats {
+        display: flex;
+        gap: 2rem;
+        margin-bottom: 2rem;
+        padding: 1rem;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .stat-item {
+        text-align: center;
+        padding: 0.5rem;
+        border-radius: 4px;
+    }
+
+    .stat-item.running { background-color: #d4edda; color: #155724; }
+    .stat-item.stopped { background-color: #f8d7da; color: #721c24; }
+    .stat-item.error { background-color: #fff3cd; color: #856404; }
+
+    .stat-value {
+        font-size: 1.5rem;
+        font-weight: bold;
+        display: block;
+    }
+
+    .stat-label {
+        font-size: 0.8rem;
+        opacity: 0.8;
+    }
+
+    .services-table-container {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+
+    .services-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .services-table th {
+        background: #f8f9fa;
+        padding: 1rem;
+        text-align: left;
+        font-weight: bold;
+        border-bottom: 2px solid #e0e0e0;
+    }
+
+    .services-table td {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .service-row.error {
+        background-color: #fff5f5;
+    }
+
+    .service-row.warning {
+        background-color: #fffbf0;
+    }
+
+    .service-name-cell {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .service-display-name {
+        font-size: 0.8rem;
+        color: #666;
+    }
+
+    .server-hostname {
+        font-family: monospace;
+        background: #f0f0f0;
+        padding: 0.25rem 0.5rem;
+        border-radius: 3px;
+        font-size: 0.9rem;
+    }
+
+    .status-badge {
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: bold;
+    }
+
+    .status-badge.running { background-color: #d4edda; color: #155724; }
+    .status-badge.stopped { background-color: #f8d7da; color: #721c24; }
+    .status-badge.starting { background-color: #fff3cd; color: #856404; }
+    .status-badge.stopping { background-color: #fff3cd; color: #856404; }
+    .status-badge.error { background-color: #f8d7da; color: #721c24; }
+    .status-badge.unknown { background-color: #e2e3e5; color: #495057; }
+
+    .action-buttons {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .action-btn {
+        background: none;
+        border: 1px solid #ddd;
+        padding: 0.25rem 0.5rem;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 0.8rem;
+    }
+
+    .action-btn:hover {
+        background: #f0f0f0;
+    }
+
+    .action-btn.start:hover { background: #d4edda; }
+    .action-btn.stop:hover { background: #f8d7da; }
+    .action-btn.restart:hover { background: #fff3cd; }
+
+    .service-details-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: 8px;
+        max-width: 800px;
+        max-height: 80vh;
+        overflow-y: auto;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .close-btn {
+        background: none;
+        border: none;
+        font-size: 1.2rem;
+        cursor: pointer;
+        color: #666;
+    }
+
+    .modal-body {
+        padding: 1rem;
+    }
+
+    .detail-grid {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .detail-item {
+        display: grid;
+        grid-template-columns: 200px 1fr;
+        gap: 1rem;
+        padding: 0.5rem;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    @@media (max-width: 768px) {
+        .services-header {
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .header-actions {
+            flex-wrap: wrap;
+        }
+
+        .services-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .services-table {
+            font-size: 0.8rem;
+        }
+
+        .detail-item {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+@code {
+    private List<Service> allServices = new();
+    private List<Service> filteredServices = new();
+    private List<Server> servers = new();
+    private string searchTerm = "";
+    private string filterStatus = "";
+    private Service? selectedService = null;
+
+    private HubConnection? hubConnection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+        await SetupSignalRConnection();
+    }
+
+    private async Task LoadData()
+    {
+        servers = await DbContext.Servers.ToListAsync();
+        allServices = await DbContext.Services
+            .Where(s => s.IsActive)
+            .OrderBy(s => s.Name)
+            .ToListAsync();
+        
+        FilterServices();
+    }
+
+    private async Task SetupSignalRConnection()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl("/dashboardhub")
+            .WithAutomaticReconnect()
+            .Build();
+
+        hubConnection.On<object>("ServiceStatusUpdate", (update) =>
+        {
+            InvokeAsync(async () =>
+            {
+                await LoadData();
+                StateHasChanged();
+            });
+        });
+
+        await hubConnection.StartAsync();
+    }
+
+    private void FilterServices()
+    {
+        filteredServices = allServices.Where(service =>
+            (string.IsNullOrEmpty(searchTerm) || 
+             service.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+             (service.DisplayName?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+             GetServerHostname(service.ServerId).Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) &&
+            (string.IsNullOrEmpty(filterStatus) || service.Status.ToString() == filterStatus)
+        ).ToList();
+        
+        StateHasChanged();
+    }
+
+    private async Task RefreshServices()
+    {
+        await LoadData();
+    }
+
+    private string GetServerHostname(Guid serverId)
+    {
+        return servers.FirstOrDefault(s => s.Id == serverId)?.Hostname ?? "Unknown";
+    }
+
+    private string GetServerInfo(Guid serverId)
+    {
+        var server = servers.FirstOrDefault(s => s.Id == serverId);
+        return server != null ? $"{server.Hostname} ({server.OsType})" : "Unknown Server";
+    }
+
+    private string GetServiceRowClass(Service service)
+    {
+        return service.Status switch
+        {
+            ServiceStatus.Error => "error",
+            ServiceStatus.Stopped when service.StartupType == StartupType.Automatic => "warning",
+            _ => ""
+        };
+    }
+
+    private string GetTimeAgo(DateTime timestamp)
+    {
+        var timeSpan = DateTime.UtcNow - timestamp;
+        if (timeSpan.TotalMinutes < 1) return "Just now";
+        if (timeSpan.TotalMinutes < 60) return $"{(int)timeSpan.TotalMinutes}m ago";
+        if (timeSpan.TotalHours < 24) return $"{(int)timeSpan.TotalHours}h ago";
+        return $"{(int)timeSpan.TotalDays}d ago";
+    }
+
+    // Service Control Methods
+    private async Task StartService(Service service)
+    {
+        try
+        {
+            var (success, message) = await ServiceManagement.StartServiceAsync(service.ServerId, service.Name);
+            
+            var alertMessage = success 
+                ? $"✅ Service {service.Name} started successfully: {message}"
+                : $"❌ Failed to start service {service.Name}: {message}";
+                
+            await JS.InvokeVoidAsync("alert", alertMessage);
+            
+            if (success)
+            {
+                await RefreshServices(); // Refresh the service list to show updated status
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"❌ Error starting service {service.Name}: {ex.Message}");
+        }
+    }
+
+    private async Task StopService(Service service)
+    {
+        try
+        {
+            var (success, message) = await ServiceManagement.StopServiceAsync(service.ServerId, service.Name);
+            
+            var alertMessage = success 
+                ? $"✅ Service {service.Name} stopped successfully: {message}"
+                : $"❌ Failed to stop service {service.Name}: {message}";
+                
+            await JS.InvokeVoidAsync("alert", alertMessage);
+            
+            if (success)
+            {
+                await RefreshServices(); // Refresh the service list to show updated status
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"❌ Error stopping service {service.Name}: {ex.Message}");
+        }
+    }
+
+    private async Task RestartService(Service service)
+    {
+        try
+        {
+            var (success, message) = await ServiceManagement.RestartServiceAsync(service.ServerId, service.Name);
+            
+            var alertMessage = success 
+                ? $"✅ Service {service.Name} restarted successfully: {message}"
+                : $"❌ Failed to restart service {service.Name}: {message}";
+                
+            await JS.InvokeVoidAsync("alert", alertMessage);
+            
+            if (success)
+            {
+                await RefreshServices(); // Refresh the service list to show updated status
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"❌ Error restarting service {service.Name}: {ex.Message}");
+        }
+    }
+
+    private void ShowServiceDetails(Service service)
+    {
+        selectedService = service;
+    }
+
+    private void CloseModal()
+    {
+        selectedService = null;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+}

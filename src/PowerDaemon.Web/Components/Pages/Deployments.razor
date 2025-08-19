@@ -1,0 +1,84 @@
+@page "/deployments"
+
+<PageTitle>Deployments - PowerDaemon</PageTitle>
+
+<div class="deployments-container">
+    <div class="deployments-header">
+        <h1>Deployment Management</h1>
+        <div class="header-actions">
+            <button class="new-deployment-btn">📦 New Deployment</button>
+        </div>
+    </div>
+
+    <div class="coming-soon">
+        <div class="coming-soon-content">
+            <h2>🚧 Deployment Management Coming Soon</h2>
+            <p>This feature will include:</p>
+            <ul>
+                <li>Service deployment orchestration</li>
+                <li>Blue-green deployment strategies</li>
+                <li>Rollback capabilities</li>
+                <li>Deployment history and tracking</li>
+                <li>Package management</li>
+            </ul>
+            <p>Currently implementing core monitoring functionality first.</p>
+        </div>
+    </div>
+</div>
+
+<style>
+    .deployments-container {
+        padding: 1rem;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    .deployments-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .new-deployment-btn {
+        background: #28a745;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .coming-soon {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 400px;
+    }
+
+    .coming-soon-content {
+        text-align: center;
+        padding: 3rem;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        max-width: 600px;
+    }
+
+    .coming-soon-content h2 {
+        color: #666;
+        margin-bottom: 1rem;
+    }
+
+    .coming-soon-content ul {
+        text-align: left;
+        margin: 2rem 0;
+    }
+
+    .coming-soon-content li {
+        margin: 0.5rem 0;
+        padding: 0.25rem 0;
+    }
+</style>

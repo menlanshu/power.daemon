@@ -1,0 +1,181 @@
+syntax = "proto3";
+
+package powerdaemon;
+
+option csharp_namespace = "PowerDaemon.Protos";
+
+import "google/protobuf/timestamp.proto";
+
+// Agent Service - Main gRPC service for agent-central communication
+service AgentService {
+    // Agent Registration and Heartbeat
+    rpc RegisterAgent(AgentRegistration) returns (RegistrationResponse);
+    rpc SendHeartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+    
+    // Service Discovery
+    rpc ReportServices(ServiceDiscovery) returns (ServiceDiscoveryResponse);
+    
+    // Metrics Streaming
+    rpc StreamMetrics(stream MetricsBatch) returns (MetricsResponse);
+    
+    // Service Commands
+    rpc ExecuteServiceCommand(ServiceCommand) returns (CommandResult);
+    
+    // Deployment
+    rpc DeployService(stream DeploymentPackage) returns (stream DeploymentProgress);
+    rpc RollbackService(RollbackRequest) returns (RollbackResult);
+}
+
+// Agent Registration
+message AgentRegistration {
+    string hostname = 1;
+    string ip_address = 2;
+    string os_type = 3; // Windows, Linux
+    string os_version = 4;
+    string agent_version = 5;
+    int32 cpu_cores = 6;
+    int64 total_memory_mb = 7;
+    string location = 8;
+    string environment = 9;
+    map<string, string> tags = 10;
+}
+
+message RegistrationResponse {
+    string server_id = 1;
+    bool success = 2;
+    string message = 3;
+    AgentSettings configuration = 4;
+}
+
+message AgentSettings {
+    int32 metrics_collection_interval_seconds = 1;
+    int32 heartbeat_interval_seconds = 2;
+    int32 service_discovery_interval_seconds = 3;
+    repeated string service_discovery_filters = 4;
+}
+
+// Heartbeat
+message HeartbeatRequest {
+    string server_id = 1;
+    string hostname = 2;
+    google.protobuf.Timestamp timestamp = 3;
+    string agent_status = 4; // Healthy, Warning, Critical
+    int32 service_count = 5;
+    double cpu_usage_percent = 6;
+    int64 memory_usage_mb = 7;
+    string error_message = 8;
+}
+
+message HeartbeatResponse {
+    bool success = 1;
+    string message = 2;
+    repeated ServiceCommand pending_commands = 3;
+}
+
+// Service Discovery
+message ServiceDiscovery {
+    string server_id = 1;
+    string hostname = 2;
+    repeated ServiceInfo services = 3;
+    google.protobuf.Timestamp discovered_at = 4;
+}
+
+message ServiceInfo {
+    string name = 1;
+    string display_name = 2;
+    string description = 3;
+    string version = 4;
+    string status = 5; // Running, Stopped, Starting, Stopping, Error, Unknown
+    int32 process_id = 6;
+    string executable_path = 7;
+    string working_directory = 8;
+    string startup_type = 9; // Automatic, Manual, Disabled
+    string service_account = 10;
+    google.protobuf.Timestamp last_start_time = 11;
+    bool is_active = 12;
+    int32 port = 13;
+    string config_file_path = 14;
+}
+
+message ServiceDiscoveryResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+// Metrics
+message MetricsBatch {
+    string server_id = 1;
+    string hostname = 2;
+    repeated MetricData metrics = 3;
+    google.protobuf.Timestamp collected_at = 4;
+}
+
+message MetricData {
+    string server_id = 1;
+    string service_id = 2; // Optional - for service-specific metrics
+    string metric_type = 3; // CPU, Memory, Disk, Network, Custom
+    string metric_name = 4;
+    double value = 5;
+    string unit = 6;
+    google.protobuf.Timestamp timestamp = 7;
+    map<string, string> tags = 8;
+}
+
+message MetricsResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+// Service Commands
+message ServiceCommand {
+    string command_id = 1;
+    string server_id = 2;
+    string service_name = 3;
+    string command = 4; // start, stop, restart, status, health_check
+    map<string, string> parameters = 5;
+    google.protobuf.Timestamp issued_at = 6;
+}
+
+message CommandResult {
+    string command_id = 1;
+    bool success = 2;
+    string message = 3;
+    int32 exit_code = 4;
+    string stdout = 5;
+    string stderr = 6;
+    google.protobuf.Timestamp executed_at = 7;
+}
+
+// Deployment
+message DeploymentPackage {
+    string deployment_id = 1;
+    string service_name = 2;
+    string version = 3;
+    bytes package_data = 4;
+    map<string, string> configuration = 5;
+    string deployment_strategy = 6; // Immediate, Rolling, BlueGreen, Canary
+    string checksum = 7;
+    int64 total_size = 8;
+    int64 chunk_offset = 9;
+}
+
+message DeploymentProgress {
+    string deployment_id = 1;
+    string status = 2; // Pending, InProgress, Success, Failed
+    string message = 3;
+    double progress_percent = 4;
+    google.protobuf.Timestamp timestamp = 5;
+}
+
+message RollbackRequest {
+    string service_name = 1;
+    string target_version = 2;
+    string reason = 3;
+}
+
+message RollbackResult {
+    bool success = 1;
+    string message = 2;
+    string previous_version = 3;
+    string current_version = 4;
+}
