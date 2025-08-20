@@ -18,9 +18,9 @@ public class WindowsServiceDiscovery
         _logger = logger;
     }
 
-    public async Task<List<ServiceInfo>> DiscoverServicesAsync(CancellationToken cancellationToken = default)
+    public async Task<List<ServiceInfoDto>> DiscoverServicesAsync(CancellationToken cancellationToken = default)
     {
-        var services = new List<ServiceInfo>();
+        var services = new List<ServiceInfoDto>();
 
         try
         {
@@ -61,11 +61,11 @@ public class WindowsServiceDiscovery
         return services;
     }
 
-    private async Task<ServiceInfo?> GetServiceInfoAsync(ServiceController service, CancellationToken cancellationToken)
+    private async Task<ServiceInfoDto?> GetServiceInfoAsync(ServiceController service, CancellationToken cancellationToken)
     {
         try
         {
-            var serviceInfo = new ServiceInfo
+            var serviceInfo = new ServiceInfoDto
             {
                 Name = service.ServiceName,
                 DisplayName = service.DisplayName,
@@ -90,7 +90,7 @@ public class WindowsServiceDiscovery
         }
     }
 
-    private async Task EnrichServiceInfoWithWmiAsync(ServiceInfo serviceInfo, CancellationToken cancellationToken)
+    private async Task EnrichServiceInfoWithWmiAsync(ServiceInfoDto serviceInfo, CancellationToken cancellationToken)
     {
         try
         {
@@ -116,7 +116,7 @@ public class WindowsServiceDiscovery
         await Task.CompletedTask;
     }
 
-    private async Task EnrichServiceInfoWithProcessAsync(ServiceInfo serviceInfo, CancellationToken cancellationToken)
+    private async Task EnrichServiceInfoWithProcessAsync(ServiceInfoDto serviceInfo, CancellationToken cancellationToken)
     {
         try
         {
@@ -161,7 +161,7 @@ public class WindowsServiceDiscovery
         await Task.CompletedTask;
     }
 
-    private static bool IsCSharpService(ServiceInfo serviceInfo)
+    private static bool IsCSharpService(ServiceInfoDto serviceInfo)
     {
         if (string.IsNullOrEmpty(serviceInfo.ExecutablePath))
             return false;

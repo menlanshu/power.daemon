@@ -178,9 +178,7 @@ public class GrpcClientService : IGrpcClient, IDisposable
                     WorkingDirectory = service.WorkingDirectory ?? string.Empty,
                     StartupType = service.StartupType.ToString(),
                     ServiceAccount = service.ServiceAccount ?? string.Empty,
-                    IsActive = service.IsActive,
-                    Port = service.Port ?? 0,
-                    ConfigFilePath = service.ConfigFilePath ?? string.Empty
+                    IsActive = service.IsActive
                 };
 
                 if (service.LastStartTime.HasValue)
@@ -218,7 +216,7 @@ public class GrpcClientService : IGrpcClient, IDisposable
         }
     }
 
-    public async Task<bool> StreamMetricsAsync(MetricBatch metrics, CancellationToken cancellationToken = default)
+    public async Task<bool> StreamMetricsAsync(MetricBatchDto metrics, CancellationToken cancellationToken = default)
     {
         try
         {

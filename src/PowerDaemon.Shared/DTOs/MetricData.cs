@@ -1,6 +1,6 @@
 namespace PowerDaemon.Shared.DTOs;
 
-public class MetricData
+public class MetricDataDto
 {
     public Guid ServerId { get; set; }
     public Guid? ServiceId { get; set; }
@@ -12,10 +12,10 @@ public class MetricData
     public Dictionary<string, string>? Tags { get; set; }
 }
 
-public class MetricBatch
+public class MetricBatchDto
 {
     public Guid ServerId { get; set; }
     public string Hostname { get; set; } = string.Empty;
-    public List<MetricData> Metrics { get; set; } = new();
+    public List<MetricDataDto> Metrics { get; set; } = new();
     public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
 }

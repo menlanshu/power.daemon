@@ -19,9 +19,9 @@ public class LinuxServiceDiscovery
         _logger = logger;
     }
 
-    public async Task<List<ServiceInfo>> DiscoverServicesAsync(CancellationToken cancellationToken = default)
+    public async Task<List<ServiceInfoDto>> DiscoverServicesAsync(CancellationToken cancellationToken = default)
     {
-        var services = new List<ServiceInfo>();
+        var services = new List<ServiceInfoDto>();
 
         try
         {
@@ -91,11 +91,11 @@ public class LinuxServiceDiscovery
         return services;
     }
 
-    private async Task<ServiceInfo?> GetServiceInfoAsync(string serviceName, CancellationToken cancellationToken)
+    private async Task<ServiceInfoDto?> GetServiceInfoAsync(string serviceName, CancellationToken cancellationToken)
     {
         try
         {
-            var serviceInfo = new ServiceInfo
+            var serviceInfo = new ServiceInfoDto
             {
                 Name = serviceName,
                 DisplayName = serviceName
@@ -122,7 +122,7 @@ public class LinuxServiceDiscovery
         }
     }
 
-    private async Task EnrichServiceWithStatusAsync(ServiceInfo serviceInfo, CancellationToken cancellationToken)
+    private async Task EnrichServiceWithStatusAsync(ServiceInfoDto serviceInfo, CancellationToken cancellationToken)
     {
         try
         {
@@ -163,7 +163,7 @@ public class LinuxServiceDiscovery
         }
     }
 
-    private async Task EnrichServiceWithUnitFileAsync(ServiceInfo serviceInfo, CancellationToken cancellationToken)
+    private async Task EnrichServiceWithUnitFileAsync(ServiceInfoDto serviceInfo, CancellationToken cancellationToken)
     {
         try
         {
@@ -208,7 +208,7 @@ public class LinuxServiceDiscovery
         }
     }
 
-    private async Task EnrichServiceWithProcessAsync(ServiceInfo serviceInfo, CancellationToken cancellationToken)
+    private async Task EnrichServiceWithProcessAsync(ServiceInfoDto serviceInfo, CancellationToken cancellationToken)
     {
         try
         {
@@ -257,7 +257,7 @@ public class LinuxServiceDiscovery
         }
     }
 
-    private async Task<bool> IsCSharpServiceAsync(ServiceInfo serviceInfo, CancellationToken cancellationToken)
+    private async Task<bool> IsCSharpServiceAsync(ServiceInfoDto serviceInfo, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(serviceInfo.ExecutablePath))
             return false;

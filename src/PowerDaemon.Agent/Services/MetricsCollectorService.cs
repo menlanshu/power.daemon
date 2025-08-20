@@ -13,7 +13,7 @@ public class MetricsCollectorService : IMetricsCollector
     private readonly ILogger<MetricsCollectorService> _logger;
     private readonly AgentConfiguration _config;
     private readonly Timer? _collectionTimer;
-    private readonly List<MetricData> _bufferedMetrics = new();
+    private readonly List<MetricDataDto> _bufferedMetrics = new();
     private readonly object _bufferLock = new();
     private CancellationTokenSource? _collectionCts;
 
@@ -37,9 +37,9 @@ public class MetricsCollectorService : IMetricsCollector
         }
     }
 
-    public async Task<MetricBatch> CollectMetricsAsync(CancellationToken cancellationToken = default)
+    public async Task<MetricBatchDto> CollectMetricsAsync(CancellationToken cancellationToken = default)
     {
-        var metrics = new List<MetricData>();
+        var metrics = new List<MetricDataDto>();
         var timestamp = DateTime.UtcNow;
 
         try
@@ -59,7 +59,7 @@ public class MetricsCollectorService : IMetricsCollector
             _logger.LogError(ex, "Error during metrics collection");
         }
 
-        return new MetricBatch
+        return new MetricBatchDto
         {
             ServerId = _config.ServerId ?? Guid.NewGuid(),
             Hostname = _config.Hostname,
@@ -138,7 +138,7 @@ public class MetricsCollectorService : IMetricsCollector
         }
     }
 
-    private async Task CollectSystemMetricsAsync(List<MetricData> metrics, DateTime timestamp, CancellationToken cancellationToken)
+    private async Task CollectSystemMetricsAsync(List<MetricDataDto> metrics, DateTime timestamp, CancellationToken cancellationToken)
     {
         var serverId = _config.ServerId ?? Guid.NewGuid();
 
@@ -152,7 +152,7 @@ public class MetricsCollectorService : IMetricsCollector
         }
     }
 
-    private async Task CollectWindowsSystemMetricsAsync(List<MetricData> metrics, Guid serverId, DateTime timestamp, CancellationToken cancellationToken)
+    private async Task CollectWindowsSystemMetricsAsync(List<MetricDataDto> metrics, Guid serverId, DateTime timestamp, CancellationToken cancellationToken)
     {
         try
         {
@@ -160,7 +160,7 @@ public class MetricsCollectorService : IMetricsCollector
             if (_cpuCounter != null)
             {
                 var cpuUsage = _cpuCounter.NextValue();
-                metrics.Add(new MetricData
+                metrics.Add(new MetricDataDto
                 {
                     ServerId = serverId,
                     MetricType = MetricTypes.Cpu,
@@ -176,7 +176,7 @@ public class MetricsCollectorService : IMetricsCollector
             var totalMemory = memoryInfo.TotalAvailableMemoryBytes;
             var usedMemory = totalMemory - memoryInfo.HighMemoryLoadThresholdBytes;
             
-            metrics.Add(new MetricData
+            metrics.Add(new MetricDataDto
             {
                 ServerId = serverId,
                 MetricType = MetricTypes.Memory,
@@ -186,7 +186,7 @@ public class MetricsCollectorService : IMetricsCollector
                 Timestamp = timestamp
             });
 
-            metrics.Add(new MetricData
+            metrics.Add(new MetricDataDto
             {
                 ServerId = serverId,
                 MetricType = MetricTypes.Memory,
@@ -200,7 +200,7 @@ public class MetricsCollectorService : IMetricsCollector
             foreach (var (name, counter) in _diskCounters)
             {
                 var value = counter.NextValue();
-                metrics.Add(new MetricData
+                metrics.Add(new MetricDataDto
                 {
                     ServerId = serverId,
                     MetricType = MetricTypes.Disk,
@@ -214,7 +214,7 @@ public class MetricsCollectorService : IMetricsCollector
             foreach (var (name, counter) in _networkCounters)
             {
                 var value = counter.NextValue();
-                metrics.Add(new MetricData
+                metrics.Add(new MetricDataDto
                 {
                     ServerId = serverId,
                     MetricType = MetricTypes.Network,
@@ -233,7 +233,7 @@ public class MetricsCollectorService : IMetricsCollector
         await Task.CompletedTask;
     }
 
-    private async Task CollectLinuxSystemMetricsAsync(List<MetricData> metrics, Guid serverId, DateTime timestamp, CancellationToken cancellationToken)
+    private async Task CollectLinuxSystemMetricsAsync(List<MetricDataDto> metrics, Guid serverId, DateTime timestamp, CancellationToken cancellationToken)
     {
         try
         {
@@ -255,7 +255,7 @@ public class MetricsCollectorService : IMetricsCollector
         }
     }
 
-    private async Task CollectLinuxCpuMetricsAsync(List<MetricData> metrics, Guid serverId, DateTime timestamp, CancellationToken cancellationToken)
+    private async Task CollectLinuxCpuMetricsAsync(List<MetricDataDto> metrics, Guid serverId, DateTime timestamp, CancellationToken cancellationToken)
     {
         try
         {
@@ -280,7 +280,7 @@ public class MetricsCollectorService : IMetricsCollector
                     var activeTime = total - idle;
                     var cpuUsage = (activeTime / (double)total) * 100;
 
-                    metrics.Add(new MetricData
+                    metrics.Add(new MetricDataDto
                     {
                         ServerId = serverId,
                         MetricType = MetricTypes.Cpu,
@@ -298,7 +298,7 @@ public class MetricsCollectorService : IMetricsCollector
         }
     }
 
-    private async Task CollectLinuxMemoryMetricsAsync(List<MetricData> metrics, Guid serverId, DateTime timestamp, CancellationToken cancellationToken)
+    private async Task CollectLinuxMemoryMetricsAsync(List<MetricDataDto> metrics, Guid serverId, DateTime timestamp, CancellationToken cancellationToken)
     {
         try
         {
@@ -315,7 +315,7 @@ public class MetricsCollectorService : IMetricsCollector
                 var memUsedMb = memUsed / 1024.0; // Convert KB to MB
                 var memUsedPercent = (memUsed / (double)memTotal) * 100;
 
-                metrics.Add(new MetricData
+                metrics.Add(new MetricDataDto
                 {
                     ServerId = serverId,
                     MetricType = MetricTypes.Memory,
@@ -325,7 +325,7 @@ public class MetricsCollectorService : IMetricsCollector
                     Timestamp = timestamp
                 });
 
-                metrics.Add(new MetricData
+                metrics.Add(new MetricDataDto
                 {
                     ServerId = serverId,
                     MetricType = MetricTypes.Memory,
@@ -342,7 +342,7 @@ public class MetricsCollectorService : IMetricsCollector
         }
     }
 
-    private async Task CollectLinuxDiskMetricsAsync(List<MetricData> metrics, Guid serverId, DateTime timestamp, CancellationToken cancellationToken)
+    private async Task CollectLinuxDiskMetricsAsync(List<MetricDataDto> metrics, Guid serverId, DateTime timestamp, CancellationToken cancellationToken)
     {
         try
         {
@@ -362,7 +362,7 @@ public class MetricsCollectorService : IMetricsCollector
                         var readKbps = long.Parse(parts[5]) * 512 / 1024.0; // sectors to KB
                         var writeKbps = long.Parse(parts[9]) * 512 / 1024.0;
 
-                        metrics.Add(new MetricData
+                        metrics.Add(new MetricDataDto
                         {
                             ServerId = serverId,
                             MetricType = MetricTypes.Disk,
@@ -373,7 +373,7 @@ public class MetricsCollectorService : IMetricsCollector
                             Tags = new() { ["device"] = deviceName }
                         });
 
-                        metrics.Add(new MetricData
+                        metrics.Add(new MetricDataDto
                         {
                             ServerId = serverId,
                             MetricType = MetricTypes.Disk,
@@ -393,7 +393,7 @@ public class MetricsCollectorService : IMetricsCollector
         }
     }
 
-    private async Task CollectLinuxNetworkMetricsAsync(List<MetricData> metrics, Guid serverId, DateTime timestamp, CancellationToken cancellationToken)
+    private async Task CollectLinuxNetworkMetricsAsync(List<MetricDataDto> metrics, Guid serverId, DateTime timestamp, CancellationToken cancellationToken)
     {
         try
         {
@@ -415,7 +415,7 @@ public class MetricsCollectorService : IMetricsCollector
                         var rxBytes = long.Parse(stats[0]);
                         var txBytes = long.Parse(stats[8]);
 
-                        metrics.Add(new MetricData
+                        metrics.Add(new MetricDataDto
                         {
                             ServerId = serverId,
                             MetricType = MetricTypes.Network,
@@ -426,7 +426,7 @@ public class MetricsCollectorService : IMetricsCollector
                             Tags = new() { ["interface"] = interfaceName }
                         });
 
-                        metrics.Add(new MetricData
+                        metrics.Add(new MetricDataDto
                         {
                             ServerId = serverId,
                             MetricType = MetricTypes.Network,
@@ -446,7 +446,7 @@ public class MetricsCollectorService : IMetricsCollector
         }
     }
 
-    private async Task CollectServiceMetricsAsync(List<MetricData> metrics, DateTime timestamp, CancellationToken cancellationToken)
+    private async Task CollectServiceMetricsAsync(List<MetricDataDto> metrics, DateTime timestamp, CancellationToken cancellationToken)
     {
         try
         {
@@ -464,7 +464,7 @@ public class MetricsCollectorService : IMetricsCollector
                     var serviceId = Guid.NewGuid(); // In real implementation, map to actual service
 
                     // Thread count
-                    metrics.Add(new MetricData
+                    metrics.Add(new MetricDataDto
                     {
                         ServerId = serverId,
                         ServiceId = serviceId,
@@ -479,7 +479,7 @@ public class MetricsCollectorService : IMetricsCollector
                     // Handle count (Windows only)
                     if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                     {
-                        metrics.Add(new MetricData
+                        metrics.Add(new MetricDataDto
                         {
                             ServerId = serverId,
                             ServiceId = serviceId,
@@ -493,7 +493,7 @@ public class MetricsCollectorService : IMetricsCollector
                     }
 
                     // Memory usage
-                    metrics.Add(new MetricData
+                    metrics.Add(new MetricDataDto
                     {
                         ServerId = serverId,
                         ServiceId = serviceId,

@@ -4,6 +4,7 @@ using PowerDaemon.Orchestrator.Models;
 using PowerDaemon.Orchestrator.Configuration;
 using PowerDaemon.Messaging.Services;
 using PowerDaemon.Messaging.Messages;
+using OrchestratorServiceCommand = PowerDaemon.Orchestrator.Models.ServiceCommand;
 using PowerDaemon.Cache.Services;
 
 namespace PowerDaemon.Orchestrator.Services;
@@ -283,9 +284,9 @@ public class WorkflowExecutor : IWorkflowExecutor
             using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
             // Create rollback command
-            var rollbackCommand = new DeploymentCommand
+            var rollbackCommand = new PowerDaemon.Messaging.Messages.DeploymentCommand
             {
-                Type = ServiceCommand.Rollback,
+                Type = OrchestratorServiceCommand.Rollback,
                 ServiceName = workflow.ServiceName,
                 TargetServers = workflow.TargetServers,
                 Parameters = new Dictionary<string, object>
@@ -300,8 +301,16 @@ public class WorkflowExecutor : IWorkflowExecutor
             {
                 try
                 {
-                    rollbackCommand.TargetServers = new List<string> { server };
-                    await _messagePublisher.PublishAsync(rollbackCommand, $"rollback.{server}", combinedCts.Token);
+                    var serverRollbackCommand = new PowerDaemon.Messaging.Messages.DeploymentCommand
+                    {
+                        DeploymentId = rollbackCommand.DeploymentId,
+                        TargetServerId = server,
+                        ServiceName = rollbackCommand.ServiceName,
+                        Strategy = rollbackCommand.Strategy,
+                        RollbackVersion = rollbackCommand.RollbackVersion,
+                        Configuration = rollbackCommand.Configuration
+                    };
+                    await _messagePublisher.PublishAsync(serverRollbackCommand, $"rollback.{server}", combinedCts.Token);
                     
                     // Wait for rollback completion with health check
                     var healthCheckTimeout = workflow.RollbackConfiguration.HealthCheckTimeout;
@@ -420,15 +429,16 @@ public class WorkflowExecutor : IWorkflowExecutor
 
     private async Task<bool> ExecuteDeployStep(DeploymentWorkflow workflow, DeploymentStep step, CancellationToken cancellationToken)
     {
-        var deployCommand = new DeploymentCommand
+        var deployCommand = new PowerDaemon.Messaging.Messages.DeploymentCommand
         {
-            Type = ServiceCommand.Deploy,
+            DeploymentId = workflow.Id,
+            TargetServerId = step.TargetServer,
             ServiceName = workflow.ServiceName,
-            TargetServers = new List<string> { step.TargetServer },
-            Parameters = new Dictionary<string, object>(step.Parameters)
+            Strategy = PowerDaemon.Messaging.Messages.DeploymentStrategy.Rolling,
+            PackageUrl = workflow.PackageUrl,
+            Version = workflow.Version,
+            Configuration = new Dictionary<string, object>(step.Parameters)
             {
-                ["PackageUrl"] = workflow.PackageUrl,
-                ["Version"] = workflow.Version,
                 ["WorkflowId"] = workflow.Id,
                 ["StepId"] = step.Id
             }
@@ -464,21 +474,23 @@ public class WorkflowExecutor : IWorkflowExecutor
     {
         var serviceCommand = step.Type switch
         {
-            StepType.ServiceStart => ServiceCommand.Start,
-            StepType.ServiceStop => ServiceCommand.Stop,
-            StepType.ServiceRestart => ServiceCommand.Restart,
-            _ => ServiceCommand.Status
+            StepType.ServiceStart => OrchestratorServiceCommand.Start,
+            StepType.ServiceStop => OrchestratorServiceCommand.Stop,
+            StepType.ServiceRestart => OrchestratorServiceCommand.Restart,
+            _ => OrchestratorServiceCommand.Status
         };
 
-        var command = new DeploymentCommand
+        var command = new PowerDaemon.Messaging.Messages.DeploymentCommand
         {
-            Type = serviceCommand,
+            DeploymentId = workflow.Id,
+            TargetServerId = step.TargetServer,
             ServiceName = workflow.ServiceName,
-            TargetServers = new List<string> { step.TargetServer },
-            Parameters = new Dictionary<string, object>(step.Parameters)
+            Strategy = PowerDaemon.Messaging.Messages.DeploymentStrategy.Rolling,
+            Configuration = new Dictionary<string, object>(step.Parameters)
             {
                 ["WorkflowId"] = workflow.Id,
-                ["StepId"] = step.Id
+                ["StepId"] = step.Id,
+                ["ServiceCommand"] = serviceCommand.ToString()
             }
         };
 

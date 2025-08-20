@@ -15,6 +15,7 @@ public class ServiceDiscoveryService : IServiceDiscovery
 
     public ServiceDiscoveryService(
         ILogger<ServiceDiscoveryService> logger,
+        ILoggerFactory loggerFactory,
         IOptions<AgentConfiguration> config)
     {
         _logger = logger;
@@ -24,12 +25,12 @@ public class ServiceDiscoveryService : IServiceDiscovery
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             _windowsDiscovery = new WindowsServiceDiscovery(
-                logger.CreateLogger<WindowsServiceDiscovery>());
+                loggerFactory.CreateLogger<WindowsServiceDiscovery>());
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
             _linuxDiscovery = new LinuxServiceDiscovery(
-                logger.CreateLogger<LinuxServiceDiscovery>());
+                loggerFactory.CreateLogger<LinuxServiceDiscovery>());
         }
     }
 
@@ -38,7 +39,7 @@ public class ServiceDiscoveryService : IServiceDiscovery
         _logger.LogInformation("Starting cross-platform service discovery on {OS}", 
             RuntimeInformation.OSDescription);
 
-        var services = new List<ServiceInfo>();
+        var services = new List<ServiceInfoDto>();
 
         try
         {
@@ -79,9 +80,9 @@ public class ServiceDiscoveryService : IServiceDiscovery
         };
     }
 
-    private List<ServiceInfo> ApplyFilters(List<ServiceInfo> services)
+    private List<ServiceInfoDto> ApplyFilters(List<ServiceInfoDto> services)
     {
-        var filteredServices = new List<ServiceInfo>();
+        var filteredServices = new List<ServiceInfoDto>();
 
         foreach (var service in services)
         {

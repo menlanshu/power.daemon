@@ -220,7 +220,7 @@ public class DeploymentOrchestratorService : IDeploymentOrchestrator, IDisposabl
         try
         {
             var lockKey = $"workflow-pause:{workflowId}";
-            await _cacheService.SetAsync(lockKey, true, TimeSpan.FromHours(24));
+            await _cacheService.SetAsync(lockKey, "paused", TimeSpan.FromHours(24));
             await AddWorkflowEventAsync(workflowId, WorkflowEventType.Paused, "Workflow paused");
             
             _logger.LogInformation("Paused workflow {WorkflowId}", workflowId);

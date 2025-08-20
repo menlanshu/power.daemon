@@ -2,7 +2,7 @@ using PowerDaemon.Shared.Models;
 
 namespace PowerDaemon.Shared.DTOs;
 
-public class ServiceInfo
+public class ServiceInfoDto
 {
     public string Name { get; set; } = string.Empty;
     public string? DisplayName { get; set; }
@@ -22,6 +22,6 @@ public class ServiceDiscoveryResult
 {
     public Guid ServerId { get; set; }
     public string Hostname { get; set; } = string.Empty;
-    public List<ServiceInfo> Services { get; set; } = new();
+    public List<ServiceInfoDto> Services { get; set; } = new();
     public DateTime DiscoveredAt { get; set; } = DateTime.UtcNow;
 }

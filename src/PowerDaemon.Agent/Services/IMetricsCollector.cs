@@ -4,7 +4,7 @@ namespace PowerDaemon.Agent.Services;
 
 public interface IMetricsCollector
 {
-    Task<MetricBatch> CollectMetricsAsync(CancellationToken cancellationToken = default);
+    Task<MetricBatchDto> CollectMetricsAsync(CancellationToken cancellationToken = default);
     Task StartCollectionAsync(CancellationToken cancellationToken = default);
     Task StopCollectionAsync();
 }
