@@ -1,5 +1,6 @@
 using PowerDaemon.Monitoring.Models;
 using PowerDaemon.Monitoring.Configuration;
+using PowerDaemon.Monitoring.Services;
 
 namespace PowerDaemon.Monitoring.Handlers;
 
