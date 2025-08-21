@@ -17,6 +17,9 @@ public class RedisConfiguration
     
     // Key prefixes for different data types
     public CacheKeyPrefixes KeyPrefixes { get; set; } = new();
+    
+    // Production scale optimization settings for 200+ servers
+    public CacheProductionSettings ProductionScale { get; set; } = new();
 }
 
 public class CacheTtlSettings
@@ -41,4 +44,58 @@ public class CacheKeyPrefixes
     public string Session { get; set; } = "session";
     public string Lock { get; set; } = "lock";
     public string Health { get; set; } = "health";
+}
+
+public class CacheProductionSettings
+{
+    // Connection pooling and multiplexing for high concurrency
+    public int MaxConnectionPoolSize { get; set; } = 100;
+    public int MinConnectionPoolSize { get; set; } = 20;
+    public int ConnectionMultiplexerPoolSize { get; set; } = 10;
+    public bool EnableConnectionPooling { get; set; } = true;
+    
+    // Performance optimization for 200+ servers
+    public int MaxConcurrentOperations { get; set; } = 500;
+    public int CommandTimeoutSeconds { get; set; } = 30;
+    public int OperationTimeoutSeconds { get; set; } = 10;
+    public bool EnablePipelining { get; set; } = true;
+    public int PipelineSize { get; set; } = 100;
+    
+    // Memory and storage optimization
+    public int MaxMemoryUsageMB { get; set; } = 4096; // 4GB
+    public string EvictionPolicy { get; set; } = "allkeys-lru";
+    public bool EnableCompression { get; set; } = true;
+    public int CompressionThreshold { get; set; } = 1024; // Compress values > 1KB
+    
+    // Clustering and high availability
+    public List<string> ClusterEndpoints { get; set; } = new();
+    public bool EnableClustering { get; set; } = false;
+    public bool EnableReplication { get; set; } = true;
+    public int ReplicationFactor { get; set; } = 2;
+    
+    // Sharding for horizontal scaling
+    public bool EnableSharding { get; set; } = true;
+    public int ShardCount { get; set; } = 8;
+    public string ShardingStrategy { get; set; } = "consistent-hash";
+    
+    // Monitoring and metrics
+    public bool EnableMetrics { get; set; } = true;
+    public int MetricsIntervalSeconds { get; set; } = 30;
+    public bool EnableSlowLogMonitoring { get; set; } = true;
+    public int SlowLogThresholdMs { get; set; } = 100;
+    
+    // Backup and persistence optimization
+    public bool EnablePersistence { get; set; } = true;
+    public string PersistenceStrategy { get; set; } = "rdb"; // rdb, aof, or both
+    public int BackupIntervalSeconds { get; set; } = 3600; // 1 hour
+    
+    // Rate limiting and throttling
+    public int MaxRequestsPerSecond { get; set; } = 10000;
+    public int MaxBatchSize { get; set; } = 1000;
+    public bool EnableThrottling { get; set; } = true;
+    
+    // Cache warming and preloading
+    public bool EnableCacheWarming { get; set; } = true;
+    public List<string> PreloadKeys { get; set; } = new();
+    public int WarmupTimeoutSeconds { get; set; } = 300;
 }

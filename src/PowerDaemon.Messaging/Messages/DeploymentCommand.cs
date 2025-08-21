@@ -45,6 +45,15 @@ public class DeploymentCommand
 
     [JsonPropertyName("metadata")]
     public Dictionary<string, string> Metadata { get; set; } = new();
+
+    [JsonPropertyName("type")]
+    public string Type { get; set; } = string.Empty;
+
+    [JsonPropertyName("targetServers")]
+    public List<string> TargetServers { get; set; } = new();
+
+    [JsonPropertyName("parameters")]
+    public Dictionary<string, object> Parameters { get; set; } = new();
 }
 
 public enum DeploymentStrategy
@@ -62,4 +71,14 @@ public enum DeploymentPriority
     Normal = 1,
     High = 2,
     Critical = 3
+}
+
+public static class OrchestratorServiceCommand
+{
+    public const string Deploy = "Deploy";
+    public const string Rollback = "Rollback";
+    public const string Stop = "Stop";
+    public const string Start = "Start";
+    public const string Restart = "Restart";
+    public const string HealthCheck = "HealthCheck";
 }

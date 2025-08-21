@@ -1,0 +1,288 @@
+{
+  "Production": {
+    "ServerCount": 200,
+    "Environment": "Production",
+    "LoadBalancing": {
+      "Strategy": "least-connections",
+      "HealthCheckInterval": 30
+    }
+  },
+  "RabbitMQ": {
+    "HostName": "rabbitmq-cluster.company.com",
+    "Port": 5672,
+    "UserName": "powerdaemon",
+    "Password": "${RABBITMQ_PASSWORD}",
+    "VirtualHost": "/powerdaemon",
+    "EnableSsl": true,
+    "ClusterNodes": [
+      "rabbitmq-01.company.com",
+      "rabbitmq-02.company.com",
+      "rabbitmq-03.company.com"
+    ],
+    "ProductionScale": {
+      "MaxConnectionPoolSize": 50,
+      "MinConnectionPoolSize": 10,
+      "ChannelPoolSize": 100,
+      "PrefetchCount": 20,
+      "BatchSize": 100,
+      "ConsumerThreadCount": 10,
+      "EnableMessageBatching": true,
+      "ClusterHosts": [
+        "rabbitmq-01.company.com:5672",
+        "rabbitmq-02.company.com:5672",
+        "rabbitmq-03.company.com:5672"
+      ],
+      "EnableLoadBalancing": true,
+      "MaxMessagesPerSecond": 1000,
+      "MaxConcurrentOperations": 200
+    }
+  },
+  "Redis": {
+    "ConnectionString": "redis-cluster.company.com:6379",
+    "InstanceName": "PowerDaemon-Prod",
+    "EnableSsl": true,
+    "Password": "${REDIS_PASSWORD}",
+    "ProductionScale": {
+      "MaxConnectionPoolSize": 100,
+      "MinConnectionPoolSize": 20,
+      "ConnectionMultiplexerPoolSize": 10,
+      "EnableConnectionPooling": true,
+      "MaxConcurrentOperations": 500,
+      "EnablePipelining": true,
+      "PipelineSize": 100,
+      "MaxMemoryUsageMB": 8192,
+      "EnableCompression": true,
+      "EnableClustering": true,
+      "ClusterEndpoints": [
+        "redis-01.company.com:6379",
+        "redis-02.company.com:6379", 
+        "redis-03.company.com:6379",
+        "redis-04.company.com:6379",
+        "redis-05.company.com:6379",
+        "redis-06.company.com:6379"
+      ],
+      "EnableSharding": true,
+      "ShardCount": 8,
+      "EnableReplication": true,
+      "ReplicationFactor": 2,
+      "MaxRequestsPerSecond": 10000,
+      "EnableCacheWarming": true
+    }
+  },
+  "Database": {
+    "ConnectionString": "Server=sql-cluster.company.com;Database=PowerDaemon;Integrated Security=true;TrustServerCertificate=true;Connection Timeout=30;Command Timeout=60;",
+    "EnableConnectionPooling": true,
+    "MaxPoolSize": 100,
+    "MinPoolSize": 10,
+    "ConnectionTimeout": 30,
+    "CommandTimeout": 60,
+    "EnableRetryOnFailure": true,
+    "MaxRetryCount": 3,
+    "MaxRetryDelay": "00:00:30"
+  },
+  "Monitoring": {
+    "productionScale": {
+      "dataProcessing": {
+        "batchSize": 1000,
+        "processingThreads": 16,
+        "queueCapacity": 50000,
+        "enableParallelProcessing": true,
+        "maxConcurrentOperations": 500
+      },
+      "alertingScale": {
+        "maxAlertsPerSecond": 100,
+        "alertBatchSize": 50,
+        "evaluationParallelism": 8,
+        "notificationBatchSize": 20,
+        "enableAlertGrouping": true,
+        "groupingWindowSeconds": 60
+      },
+      "metricsScale": {
+        "collectionParallelism": 16,
+        "aggregationBatchSize": 1000,
+        "maxMetricsPerServer": 1000,
+        "compressionRatio": 10,
+        "enableDownsampling": true,
+        "downsamplingIntervals": [60, 300, 3600]
+      },
+      "dashboardScale": {
+        "maxDataPointsPerWidget": 2000,
+        "cacheDurationSeconds": 60,
+        "enableWidgetCaching": true,
+        "maxConcurrentDashboards": 200,
+        "enableLazyLoading": true
+      },
+      "performance": {
+        "enablePerformanceMonitoring": true,
+        "memoryThresholdMB": 4096,
+        "cpuThresholdPercent": 80,
+        "enableAutoScaling": true,
+        "scaleUpThreshold": 80,
+        "scaleDownThreshold": 30,
+        "enableLoadBalancing": true,
+        "loadBalancingStrategy": "least-connections",
+        "healthCheckIntervalSeconds": 15
+      }
+    },
+    "alerting": {
+      "enabled": true,
+      "evaluationIntervalSeconds": 15,
+      "alertRetentionDays": 90,
+      "maxAlertsPerMinute": 50,
+      "suppressDuplicateAlerts": true,
+      "suppressionTimeoutMinutes": 5,
+      "enableEscalation": true,
+      "escalationTimeoutMinutes": 30
+    },
+    "thresholds": {
+      "cpu": {
+        "warning": 70.0,
+        "critical": 85.0,
+        "evaluationWindowMinutes": 5,
+        "minimumDataPoints": 3
+      },
+      "memory": {
+        "warning": 75.0,
+        "critical": 90.0,
+        "evaluationWindowMinutes": 5,
+        "minimumDataPoints": 3
+      },
+      "disk": {
+        "warning": 80.0,
+        "critical": 90.0,
+        "evaluationWindowMinutes": 10,
+        "minimumDataPoints": 5
+      },
+      "network": {
+        "warningMbps": 800.0,
+        "criticalMbps": 950.0,
+        "packetLossWarning": 1.0,
+        "packetLossCritical": 5.0,
+        "evaluationWindowMinutes": 5
+      }
+    },
+    "healthChecks": {
+      "enabled": true,
+      "intervalSeconds": 30,
+      "timeoutSeconds": 10,
+      "retryAttempts": 3,
+      "retryDelaySeconds": 5
+    },
+    "metrics": {
+      "collectionEnabled": true,
+      "aggregationEnabled": true,
+      "retentionDays": 90,
+      "aggregationIntervalMinutes": 1
+    }
+  },
+  "Identity": {
+    "ActiveDirectory": {
+      "Domain": "company.com",
+      "LdapServer": "ldap://dc.company.com:389",
+      "BaseDN": "DC=company,DC=com",
+      "UserSearchBase": "OU=Users,DC=company,DC=com",
+      "GroupSearchBase": "OU=Groups,DC=company,DC=com",
+      "ServiceAccount": {
+        "Username": "svc-powerdaemon@company.com",
+        "Password": "${AD_SERVICE_PASSWORD}"
+      },
+      "EnableSsl": true,
+      "ConnectionTimeout": 30,
+      "SearchTimeout": 60
+    },
+    "Jwt": {
+      "SecretKey": "${JWT_SECRET_KEY}",
+      "Issuer": "PowerDaemon-Production",
+      "Audience": "PowerDaemon-Users",
+      "ExpirationMinutes": 480,
+      "RefreshTokenExpirationDays": 7,
+      "RequireHttps": true,
+      "EnableTokenRevocation": true
+    }
+  },
+  "Orchestrator": {
+    "MaxConcurrentDeployments": 20,
+    "DeploymentTimeoutMinutes": 60,
+    "RollbackTimeoutMinutes": 30,
+    "HealthCheckRetries": 5,
+    "HealthCheckIntervalSeconds": 30,
+    "EnableParallelDeployments": true,
+    "EnableAutoRollback": true,
+    "RequireApproval": true,
+    "ApprovalTimeoutMinutes": 120,
+    "DefaultStrategy": "rolling",
+    "Strategies": {
+      "BlueGreen": {
+        "HealthCheckWaitSeconds": 300,
+        "TrafficSwitchDelaySeconds": 60
+      },
+      "Canary": {
+        "InitialTrafficPercent": 5,
+        "TrafficIncrement": 10,
+        "IncrementDelayMinutes": 10,
+        "SuccessThresholdPercent": 99
+      },
+      "Rolling": {
+        "BatchSize": 5,
+        "BatchDelaySeconds": 30,
+        "MaxUnavailable": 2
+      }
+    }
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "PowerDaemon": "Debug",
+      "Microsoft": "Warning",
+      "Microsoft.Hosting.Lifetime": "Information"
+    },
+    "File": {
+      "Path": "/var/log/powerdaemon/",
+      "MaxFileSizeMB": 100,
+      "MaxRollingFiles": 10,
+      "RollingInterval": "Day"
+    },
+    "ElasticSearch": {
+      "Enabled": true,
+      "Endpoint": "https://elasticsearch.company.com:9200",
+      "IndexName": "powerdaemon-logs",
+      "Username": "powerdaemon",
+      "Password": "${ELASTICSEARCH_PASSWORD}"
+    }
+  },
+  "Performance": {
+    "EnablePerformanceCounters": true,
+    "EnableMemoryProfiling": true,
+    "MemoryGcSettings": {
+      "ServerGC": true,
+      "ConcurrentGC": true,
+      "RetainVM": true
+    },
+    "ThreadPool": {
+      "MinWorkerThreads": 50,
+      "MinCompletionPortThreads": 50,
+      "MaxWorkerThreads": 1000,
+      "MaxCompletionPortThreads": 1000
+    }
+  },
+  "Security": {
+    "EnableHttpsRedirection": true,
+    "EnableHsts": true,
+    "HstsMaxAge": 31536000,
+    "EnableContentSecurityPolicy": true,
+    "EnableXFrameOptions": true,
+    "EnableXssProtection": true,
+    "EnableApiKeyAuthentication": true,
+    "RateLimiting": {
+      "Enabled": true,
+      "RequestsPerMinute": 1000,
+      "RequestsPerHour": 10000,
+      "EnableIpWhitelist": true,
+      "WhitelistedIPs": [
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16"
+      ]
+    }
+  }
+}

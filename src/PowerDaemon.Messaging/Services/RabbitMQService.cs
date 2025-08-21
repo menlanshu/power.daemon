@@ -97,7 +97,7 @@ public class RabbitMQService : IMessagePublisher, IMessageConsumer, IDisposable
                 basicProperties.MessageId = Guid.NewGuid().ToString();
                 basicProperties.Timestamp = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
 
-                batch.Add(_config.ExchangeName, routingKey, false, basicProperties, body);
+                batch.Add(_config.ExchangeName, routingKey, false, basicProperties, body.AsMemory());
             }
 
             batch.Publish();
@@ -212,6 +212,9 @@ public class RabbitMQService : IMessagePublisher, IMessageConsumer, IDisposable
         try
         {
             EnsureConnection();
+
+            // Use a small delay to make this properly async
+            await Task.Delay(1, cancellationToken);
 
             var result = _channel!.BasicGet(queueName, false);
             if (result == null)

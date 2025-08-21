@@ -11,7 +11,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddOrchestrator(this IServiceCollection services, IConfiguration configuration)
     {
         // Configure orchestrator settings
-        services.Configure<OrchestratorConfiguration>(configuration.GetSection("Orchestrator"));
+        services.Configure<OrchestratorConfiguration>(options => configuration.GetSection("Orchestrator").Bind(options));
 
         // Register core orchestrator services
         services.AddSingleton<IDeploymentOrchestrator, DeploymentOrchestratorService>();

@@ -286,7 +286,7 @@ public class WorkflowExecutor : IWorkflowExecutor
             // Create rollback command
             var rollbackCommand = new PowerDaemon.Messaging.Messages.DeploymentCommand
             {
-                Type = OrchestratorServiceCommand.Rollback,
+                Type = OrchestratorServiceCommand.Rollback.ToString(),
                 ServiceName = workflow.ServiceName,
                 TargetServers = workflow.TargetServers,
                 Parameters = new Dictionary<string, object>
