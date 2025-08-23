@@ -1,0 +1,162 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgresql:
+    image: postgres:15-alpine
+    container_name: powerdaemon-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: powerdaemon
+      POSTGRES_USER: powerdaemon
+      POSTGRES_PASSWORD: PowerDaemon2024!
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    networks:
+      - powerdaemon-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U powerdaemon -d powerdaemon"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # RabbitMQ Message Queue
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: powerdaemon-rabbitmq
+    restart: unless-stopped
+    hostname: powerdaemon-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: powerdaemon
+      RABBITMQ_DEFAULT_PASS: PowerDaemon2024!
+      RABBITMQ_DEFAULT_VHOST: powerdaemon
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit log_levels [{connection,info},{default,info}] disk_free_limit 2147483648"
+    ports:
+      - "5672:5672"    # AMQP port
+      - "15672:15672"  # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - rabbitmq_logs:/var/log/rabbitmq
+      - ./scripts/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+    networks:
+      - powerdaemon-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      - postgresql
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: powerdaemon-redis
+    restart: unless-stopped
+    command: >
+      redis-server 
+      --requirepass PowerDaemon2024!
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --appendonly yes
+      --appendfsync everysec
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - powerdaemon-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "PowerDaemon2024!", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Optional: Redis Commander (Redis Web UI)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: powerdaemon-redis-ui
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: "powerdaemon-redis:powerdaemon-redis:6379:0:PowerDaemon2024!"
+      HTTP_USER: admin
+      HTTP_PASSWORD: PowerDaemon2024!
+    ports:
+      - "8081:8081"
+    networks:
+      - powerdaemon-network
+    depends_on:
+      - redis
+    profiles:
+      - tools
+
+  # Optional: pgAdmin (PostgreSQL Web UI)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: powerdaemon-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@powerdaemon.local
+      PGADMIN_DEFAULT_PASSWORD: PowerDaemon2024!
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    ports:
+      - "8080:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - powerdaemon-network
+    depends_on:
+      - postgresql
+    profiles:
+      - tools
+
+  # Optional: Grafana for monitoring (when monitoring is fully implemented)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: powerdaemon-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: PowerDaemon2024!
+      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - powerdaemon-network
+    profiles:
+      - monitoring
+
+networks:
+  powerdaemon-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  postgres_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+  rabbitmq_logs:
+    driver: local
+  redis_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+  grafana_data:
+    driver: local
